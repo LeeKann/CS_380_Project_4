@@ -24,11 +24,10 @@ public class Ipv6Client {
      
      public static void main(String[] args) {
         try {
-            Socket socket = new Socket("18.221.102.182", 38003);
+            Socket socket = new Socket("18.221.102.182", 38004);
             System.out.println("Connected to server.");
             InputStream is = socket.getInputStream();
-            InputStreamReader isr = new InputStreamReader(is);
-            BufferedReader br = new BufferedReader(isr);
+            DataInputStream dis = new DataInputStream(is);
             OutputStream os = socket.getOutputStream();
             DataOutputStream dos = new DataOutputStream(os);
             
@@ -36,71 +35,43 @@ public class Ipv6Client {
             
             for(int i = 1; i <= 12; i++) {
                 
-                ByteBuffer ipv4 = ByteBuffer.allocate((int)(20 + Math.pow(2,i)));
+                ByteBuffer ipv6 = ByteBuffer.allocate((int)(40 + Math.pow(2,i)));
                 
-                ipv4.put((byte)0x45);        // version + HLen
-                ipv4.put((byte)0x00);        // TOS
-                ipv4.putShort((short)(20 + Math.pow(2,i))); // total length
-                ipv4.putShort((short)0x00);        // ident
-                ipv4.put((byte)0x40);        // Flags
-                ipv4.put((byte)0x00);        // Offset
-                ipv4.put((byte)50);          // TTL
-                ipv4.put((byte)0x06);        // Protocol
+                ipv6.putInt((int)0x60000000);           // Version + Traffic Class + Flow Control
+                ipv6.putShort((short)Math.pow(2,i));    // Payload Length
+                ipv6.put((byte)0x11);                   // Next Header
+                ipv6.put((byte)0x14);                   // Hop Limit
                 
-                ByteBuffer noChecksumIpv4 = ipv4.duplicate();     // temp bytebuffer for checksum
-                noChecksumIpv4.put((byte)0x0);        //  temp checksum
-                noChecksumIpv4.put((byte)0x0);        //  temp checksum
-                noChecksumIpv4.putInt((int)0x0);      // source address for temp
-                noChecksumIpv4.put((byte)18);         // destination address for temp
-                noChecksumIpv4.put((byte)221);        // .
-                noChecksumIpv4.put((byte)102);        // .
-                noChecksumIpv4.put((byte)182);        // .
+                ipv6.putInt((int)0x0);                  // 32 bits of zero for source address
+                ipv6.putInt((int)0x0);                  // 32 bits of zero for source address
+                ipv6.putShort((short)0x0);              // 16 bits of zero for source address
+                ipv6.putShort((short)0xffff);           // 16 bits of ones for source address
+                ipv6.putInt((int)0x0);                  // 32 bits of zero for source address
                 
-                ipv4.putShort((short)checksum(noChecksumIpv4.array()));    // Checksum inserted
-                ipv4.putInt((int)0x0);      // source address for packet
-                ipv4.put((byte)18);         // destination address for packet
-                ipv4.put((byte)221);        // .
-                ipv4.put((byte)102);        // .
-                ipv4.put((byte)182);        // .
+                ipv6.putInt((int)0x0);                  // 32 bits of zero for dst address
+                ipv6.putInt((int)0x0);                  // 32 bits of zero for dst address
+                ipv6.putShort((short)0x0);              // 16 bits of zero for dst address
+                ipv6.putShort((short)0xffff);           // 16 bits of ones for dst address
+                ipv6.put((byte)18);                     // actual destination address
+                ipv6.put((byte)221);                    // .
+                ipv6.put((byte)102);                    // .
+                ipv6.put((byte)182);                    // .
                 
-                for(int j = 0; j < Math.pow(2,i); j++) // data is just zeroes
-                    ipv4.put((byte)0x0);
+                for(int j = 0; j < Math.pow(2,i); j++) { // data is just zeroes
+                    ipv6.put((byte)0x1);
+                }
                 
                 System.out.println("data length: " + (int)Math.pow(2,i));
-                dos.write(ipv4.array());
-                String check = br.readLine();
-                System.out.println(check);
+                dos.write(ipv6.array());
+                ByteBuffer response = ByteBuffer.allocate(4);
+                for(int j = 0; j < 4; j++) {
+                    response.put(dis.readByte());
+                }
+                System.out.printf("Response: 0x" + (Integer.toHexString(response.getInt(0))).toUpperCase() + "\n\n");
             }
         }
         catch(Exception e) {
             e.printStackTrace();
         }
     }
-    
-    public static short checksum(byte[] b) {
-        int sum = 0;
-        
-        for(int i = 0; i < b.length; i++) {
-            byte upper = b[i++];
-            byte lower;
-            
-            if(i < b.length)
-                lower = b[i];
-            else
-                lower = 0;
-            
-            int result = 0;
-            result = (result | (upper<<0x8 & 0xFF00));
-            result = (result | (lower & 0x00FF));
-
-            sum += result;
-            if((sum & 0xFFFF0000) != 0) {
-                sum = sum & 0xFFFF;
-                sum += 1;
-            }
-        }
-        return (short)~(sum & 0xFFFF);
-    }
-        
-
 }
